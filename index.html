@@ -1475,13 +1475,19 @@
   }
   function openSettings() {
     calDraft = JSON.parse(JSON.stringify(cfg.cals));
-    $('setForm').innerHTML = FIELDS.map(function (f) {
+    $('setForm').innerHTML = '<h4>Move settings to another device</h4>' +
+      '<div class="full hint">Settings live only in this browser. To set up the tablet (or another browser), tap <b>Copy settings code</b> here, send it to yourself (e.g. Google Keep or email), then paste it on the other device and tap <b>Import</b>. The code contains your calendar links and relay key, so delete the message afterwards.</div>' +
+      '<div class="full" style="display:flex;gap:0.4rem;align-items:flex-start">' +
+      '<textarea id="xferCode" rows="2" placeholder="Paste a settings code here" style="flex:1"></textarea>' +
+      '<span style="display:flex;flex-direction:column;gap:0.3rem"><button type="button" class="hbtn" id="xferCopy">Copy settings code</button><button type="button" class="hbtn" id="xferImport">Import</button></span></div>' +
+      '<div class="hint full" id="xferMsg"></div>' +
+      FIELDS.map(function (f) {
       if (f[0] === 'h') return '<h4>' + f[1] + '</h4>';
       if (f[0] === 'cals') return '<div class="full grid" id="calRows" style="grid-template-columns:1fr">' + calRowsHtml() + '</div>';
       var v = cfg[f[0]];
       if (f[2] === 'checkbox') return '<label class="' + (f[3] || '') + '"><input type="checkbox" id="f_' + f[0] + '"' + (v ? ' checked' : '') + '> ' + esc(f[1]) + '</label>';
       return '<label class="' + (f[3] || '') + '">' + esc(f[1]) + '<input type="' + f[2] + '" step="any" id="f_' + f[0] + '" value="' + esc(v) + '"></label>';
-    }).join('') + '<div class="hint full">All settings, focus items, notes and pipeline data are stored only in this browser on this tablet.</div>';
+    }).join('') + '<div class="hint full">All settings, focus items, notes and pipeline data are stored only in this browser on this device. Changes take effect only after <b>Save &amp; reload</b>.</div>';
     $('setModal').style.display = 'flex';
   }
   function syncCalInputs() {
@@ -1503,6 +1509,19 @@
         .then(function () { cfg.proxy = saved; });
     }
     else if (t.getAttribute('data-rm') !== null) { syncCalInputs(); calDraft.splice(+t.getAttribute('data-rm'), 1); $('calRows').innerHTML = calRowsHtml(); }
+    else if (t.id === 'xferCopy') {
+      var code = 'DASH1:' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
+      $('xferCode').value = code; $('xferCode').select();
+      var done = function () { $('xferMsg').textContent = '✓ Copied. Paste it on the other device, then tap Import there.'; };
+      if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, function () { $('xferMsg').textContent = 'Select the code above and copy it.'; });
+      else $('xferMsg').textContent = 'Select the code above and copy it.';
+    }
+    else if (t.id === 'xferImport') {
+      var raw = $('xferCode').value.replace(/\s+/g, ''), got;
+      try { got = JSON.parse(decodeURIComponent(escape(atob(raw.replace(/^DASH1:/, ''))))); } catch (err) { got = null; }
+      if (!got || !Array.isArray(got.cals)) { $('xferMsg').style.color = '#fca5a5'; $('xferMsg').textContent = '✗ That is not a valid settings code. Copy the whole code and try again.'; return; }
+      saveJSON('dash_cfg', Object.assign({}, DEF, got)); location.reload();
+    }
     else if (t.id === 'addCal') { syncCalInputs(); calDraft.push({ name: 'Calendar ' + (calDraft.length + 1), url: '', color: '#33B679' }); $('calRows').innerHTML = calRowsHtml(); }
   });
   $('setForm').addEventListener('change', function (e) { if (e.target.type === 'color') { syncCalInputs(); $('calRows').innerHTML = calRowsHtml(); } });
@@ -1523,6 +1542,8 @@
      ========================================================= */
   $('btnFull').addEventListener('click', function () { var el = document.documentElement, fn = el.requestFullscreen || el.webkitRequestFullscreen; if (fn) fn.call(el); requestWake(); });
   $('btnRefresh').addEventListener('click', function () { refreshAll(); });
+  // Ask the browser not to clear this page's saved settings when space runs low.
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   var wake = null;
   function requestWake() { if ('wakeLock' in navigator && !wake) navigator.wakeLock.request('screen').then(function (w) { wake = w; w.addEventListener('release', function () { wake = null; }); }).catch(function () {}); }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { requestWake(); refreshAll(); } });
