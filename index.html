@@ -1606,10 +1606,10 @@
     if (page === 1 && +cfg.autoReturn > 0 && Date.now() - lastTouch > cfg.autoReturn * 60000 && $('oppModal').style.display !== 'flex') goPage(0);
     if (dayKey(new Date()) !== lastDay) location.reload();
     // Android can pause a page's timers; catch up as soon as we run again, and reload if the calendar has been stale for 30 minutes.
-    if (Date.now() - lastCalTry > 6 * 60000) loadCalendar();
+    if (Date.now() - lastCalTry > 3 * 60000) loadCalendar();
     if (cfg.cals.some(function (c) { return c.url; }) && navigator.onLine !== false && Date.now() - Math.max(lastCalOk, bootAt) > 30 * 60000) location.reload();
   }, 30000);
-  setInterval(loadCalendar, 5 * 60000);
+  setInterval(loadCalendar, 2 * 60000);
   setInterval(pullSync, 3 * 60000);
   window.addEventListener('online', refreshAll);
   window.addEventListener('pageshow', function (e) { if (e.persisted) refreshAll(); });
