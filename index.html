@@ -51,6 +51,8 @@
   #prayer, #waterInfo { font-size: 0.78rem; color: #a9bcdb; margin-top: 0.2rem; }
   #prayer b { color: #8fd3a8; }
   #waterInfo b { color: #7dd3fc; }
+  #waterInfo { cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; display: inline-block; padding: 0.15rem 0 0.15rem 0.5rem; border-radius: 0.4rem; transition: background 0.3s; }
+  #waterInfo.bump { background: rgba(125, 211, 252, 0.22); }
 
   /* ---- Today ---- */
   #todayCard { grid-area: today; }
@@ -973,7 +975,7 @@
     if (well.day !== k) { well.day = k; well.water = 0; well.lastWater = Date.now(); well.lastMove = Date.now(); saveJSON('dash_well', well); }
   }
   function renderWater() {
-    $('waterInfo').innerHTML = cfg.waterOn ? 'Water today: <b>' + well.water + ' / ' + cfg.waterTarget + '</b> 💧' : '';
+    $('waterInfo').innerHTML = cfg.waterOn ? 'Water today: <b>' + well.water + ' / ' + cfg.waterTarget + '</b> 💧 <b>＋</b>' : '';
     $('btnWater').className = cfg.waterOn ? '' : 'off'; $('btnWater').textContent = '💧 Water ' + (cfg.waterOn ? 'on' : 'off');
     $('btnMove').className = cfg.moveOn ? '' : 'off'; $('btnMove').textContent = '🚶 Stretch ' + (cfg.moveOn ? 'on' : 'off');
     $('btnDim').className = cfg.dimOn ? '' : 'off'; $('btnDim').textContent = '🌙 Night dim ' + (cfg.dimOn ? 'on' : 'off');
@@ -984,6 +986,18 @@
     renderWater(); tickClock(); setStatus(label + (cfg[key] ? ' on' : ' off'));
   }
   $('btnWater').addEventListener('click', function () { toggle('waterOn', 'Water nudges', 'lastWater'); });
+  // Tap the water counter to log a glass (also restarts the reminder timer); press and hold to take one off.
+  var wHold = null, wHeld = false;
+  function bumpWater(d) {
+    resetWellDay(); well.water = Math.max(0, well.water + d); if (d > 0) well.lastWater = Date.now();
+    saveJSON('dash_well', well); renderWater();
+    $('waterInfo').className = 'bump'; setTimeout(function () { $('waterInfo').className = ''; }, 400);
+    setStatus(d > 0 ? 'Glass logged: ' + well.water + ' / ' + cfg.waterTarget + ' (hold to undo)' : 'Removed a glass: ' + well.water + ' / ' + cfg.waterTarget);
+  }
+  $('waterInfo').addEventListener('pointerdown', function () { wHeld = false; clearTimeout(wHold); wHold = setTimeout(function () { wHeld = true; bumpWater(-1); }, 600); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { $('waterInfo').addEventListener(ev, function () { clearTimeout(wHold); }); });
+  $('waterInfo').addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  $('waterInfo').addEventListener('click', function () { if (!wHeld) bumpWater(1); });
   $('btnMove').addEventListener('click', function () { toggle('moveOn', 'Stretch nudges', 'lastMove'); });
   $('btnDim').addEventListener('click', function () { toggle('dimOn', 'Night dim'); });
   function checkNudges() {
