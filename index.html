@@ -261,7 +261,7 @@
   </section>
 
   <section class="card" id="newsCard">
-    <h2><span id="newsTabs"><button class="hbtn on" type="button" data-n="bbc">🌍 BBC Latest</button><button class="hbtn" type="button" data-n="uae">🇦🇪 UAE Latest</button></span><span class="sm" id="newsSrc"></span></h2>
+    <h2><span id="newsTabs"><button class="hbtn on" type="button" data-n="bbc">🌍 BBC News</button><button class="hbtn" type="button" data-n="uae">🇦🇪 UAE</button><button class="hbtn" type="button" data-n="sport">⚽ Sport</button></span><span class="sm" id="newsSrc"></span></h2>
     <ol class="scroll" id="newsList"><li>Loading…</li></ol>
     <div id="newsProg"><div></div></div>
   </section>
@@ -365,6 +365,7 @@
     newsBbcUrl: 'https://feeds.bbci.co.uk/news/rss.xml',
     newsUaeUrl: 'https://www.thenationalnews.com/arc/outboundfeeds/rss-latest/?outputType=xml&_website=the-national',
     newsUaeBackup: 'https://www.khaleejtimes.com/api/v1/collections/uae.rss',
+    newsSportUrl: 'https://feeds.bbci.co.uk/sport/rss.xml',
     newsRotate: '90', newsRefresh: '15',
     clocks: 'Riyadh|Asia/Riyadh, India|Asia/Kolkata, London|Europe/London',
     showPrayer: false, prayerCity: 'Dubai', prayerCountry: 'AE', prayerMethod: '16',
@@ -1013,7 +1014,8 @@
     if (m < 1) return 'just now'; if (m < 60) return m + ' min ago';
     var h = Math.round(m / 60); return h < 24 ? h + ' h ago' : Math.round(h / 24) + ' d ago';
   }
-  var NEWS = { bbc: { src: 'BBC News', items: [], at: 0 }, uae: { src: 'The National', items: [], at: 0 } };
+  var NEWS = { bbc: { src: 'BBC News', items: [], at: 0 }, uae: { src: 'The National', items: [], at: 0 }, sport: { src: 'BBC Sport', items: [], at: 0 } };
+  var NEWS_ORDER = ['bbc', 'uae', 'sport'], NEWS_COUNT = 10;
   var newsTab = 'bbc', newsHold = 0, newsTabAt = Date.now();
   function parseRssXml(txt) {
     var doc = new DOMParser().parseFromString(txt, 'text/xml'), its = doc.getElementsByTagName('item'), out = [];
@@ -1057,24 +1059,25 @@
     if (/\/(gulf-news|gulf|mena)\//.test(u)) return 'gulf';
     return 'other';
   }
-  // UAE tab: UAE stories first, then business and Gulf stories to fill 5 slots. Sport and lifestyle are skipped.
+  // UAE tab: UAE stories first, then business and Gulf stories to fill the slots. Sport and lifestyle are skipped.
   function pickUae(items) {
     var b = { uae: [], biz: [], gulf: [] };
     items.forEach(function (x) { x.sec = sectionOf(x); if (b[x.sec]) b[x.sec].push(x); });
     var cut = Date.now() - 36 * 3600000, fresh = function (a) { return a.filter(function (x) { return !x.date || x.date > cut; }); };
     return fresh(b.uae).concat(fresh(b.biz), fresh(b.gulf), b.uae, b.biz, b.gulf)
-      .filter(function (x, i, a) { return a.indexOf(x) === i; }).slice(0, 5);
+      .filter(function (x, i, a) { return a.indexOf(x) === i; }).slice(0, NEWS_COUNT);
   }
   function loadOne(k) {
     var cached = loadJSON('dash_news_' + k, null);
     if (cached && !NEWS[k].items.length) { NEWS[k].items = cached.items; NEWS[k].at = cached.at; NEWS[k].src = cached.src || NEWS[k].src; NEWS[k].stale = true; }
     var job;
-    if (k === 'bbc') job = getFeed(cfg.newsBbcUrl).then(function (it) { return { items: it.slice(0, 5), src: 'BBC News' }; });
+    if (k === 'bbc') job = getFeed(cfg.newsBbcUrl).then(function (it) { return { items: it.slice(0, NEWS_COUNT), src: 'BBC News' }; });
+    else if (k === 'sport') job = getFeed(cfg.newsSportUrl).then(function (it) { return { items: it.slice(0, NEWS_COUNT), src: 'BBC Sport' }; });
     else job = getFeed(cfg.newsUaeUrl).then(function (it) {
         var p = pickUae(it); if (!p.length) throw new Error('no UAE stories'); return { items: p, src: 'The National' };
       }).catch(function (e1) {
         if (!cfg.newsUaeBackup) throw e1;
-        return getFeed(cfg.newsUaeBackup).then(function (it) { return { items: pickUae(it).length ? pickUae(it) : it.slice(0, 5), src: 'Khaleej Times' }; });
+        return getFeed(cfg.newsUaeBackup).then(function (it) { return { items: pickUae(it).length ? pickUae(it) : it.slice(0, NEWS_COUNT), src: 'Khaleej Times' }; });
       });
     job.then(function (r) {
       NEWS[k].items = r.items; NEWS[k].src = r.src; NEWS[k].at = Date.now(); NEWS[k].stale = false; NEWS[k].err = '';
@@ -1085,7 +1088,7 @@
       if (newsTab === k) renderNews(false);
     });
   }
-  function loadNews() { loadOne('bbc'); loadOne('uae'); renderNews(false); }
+  function loadNews() { NEWS_ORDER.forEach(loadOne); renderNews(false); }
   function renderNews(animate) {
     var n = NEWS[newsTab], el = $('newsList'), btns = $('newsTabs').getElementsByTagName('button');
     for (var i = 0; i < btns.length; i++) btns[i].className = 'hbtn' + (btns[i].getAttribute('data-n') === newsTab ? ' on' : '');
@@ -1111,7 +1114,7 @@
     var per = Math.max(0, +cfg.newsRotate) * 1000, bar = $('newsProg').firstChild, now = Date.now();
     if (!per || now < newsHold) { bar.style.width = '0'; newsTabAt = now; return; }
     bar.style.width = Math.min(100, (now - newsTabAt) / per * 100) + '%';
-    if (now - newsTabAt >= per) setNewsTab(newsTab === 'bbc' ? 'uae' : 'bbc', false);
+    if (now - newsTabAt >= per) setNewsTab(NEWS_ORDER[(NEWS_ORDER.indexOf(newsTab) + 1) % NEWS_ORDER.length], false);
   }
   // Vertical carousel: every few seconds the top headline slides up and rejoins at the bottom.
   // Pauses for 20 seconds after the screen is touched so a headline can be read or tapped.
@@ -1288,12 +1291,39 @@
       readXlsx(rd.result).then(function (rows) {
         var opps = rowsToOpps(rows);
         if (pipe && pipe.opps && pipe.file !== f.name) { pipePrev = pipe; saveJSON('dash_pipe_prev', pipePrev); }
-        pipe = { at: Date.now(), file: f.name, opps: opps }; saveJSON('dash_pipe', pipe);
+        pipe = { at: Date.now(), file: f.name, opps: opps }; saveJSON('dash_pipe', pipe); pushSync();
         setStatus('Loaded ' + opps.length + ' opportunities'); renderPipeline(); goPage(1);
       }).catch(function (err) { alert('Upload failed: ' + err.message); setStatus('Upload failed'); });
     };
     rd.readAsArrayBuffer(f); this.value = '';
   });
+
+  /* Pipeline sync: the latest upload and opportunity notes are kept in your Cloudflare relay (behind its key),
+     so an upload on the laptop appears on the tablet within a few minutes. Newest change wins. */
+  var syncAt = +(loadJSON('dash_sync_at', 0)) || 0, syncDirty = !!loadJSON('dash_sync_dirty', false);
+  function syncUrl() {
+    var r = relays().filter(function (p) { return /[?&]key=[^&]+/.test(p) && /url=$/.test(p); })[0];
+    return r ? r.replace(/url=$/, 'sync=pipeline') : null;
+  }
+  function pushSync() {
+    var u = syncUrl(); syncAt = Date.now(); saveJSON('dash_sync_at', syncAt);
+    if (!u) return Promise.resolve();
+    syncDirty = true; saveJSON('dash_sync_dirty', true);
+    return fetch(u, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ at: syncAt, pipe: pipe, prev: pipePrev, notes: notes }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); syncDirty = false; saveJSON('dash_sync_dirty', false); setStatus('Pipeline synced'); })
+      .catch(function (e) { setStatus('Pipeline sync failed, will retry'); console.warn('sync push', e); });
+  }
+  function pullSync() {
+    var u = syncUrl(); if (!u) return;
+    fetch(u, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (d) {
+      if (d && d.at > syncAt) {
+        pipe = d.pipe || null; pipePrev = d.prev || null; notes = d.notes || {}; syncAt = d.at; syncDirty = false;
+        ['dash_pipe', 'dash_pipe_prev'].forEach(function (k, i) { var v = i ? pipePrev : pipe; if (v) saveJSON(k, v); else localStorage.removeItem(k); });
+        saveJSON('dash_oppnotes', notes); saveJSON('dash_sync_at', syncAt); saveJSON('dash_sync_dirty', false);
+        renderPipeline(); setStatus('Pipeline updated from your other device');
+      } else if (syncDirty || (!d && (pipe || Object.keys(notes).length))) pushSync();
+    }).catch(function (e) { console.warn('sync pull', e); });
+  }
 
   function quietDays(o, now) { return o.mod ? daysBetween(new Date(o.mod), now) : null; }
   function focusScore(o, now) {
@@ -1428,14 +1458,14 @@
       '</div><div class="grid" style="margin-top:0.8rem"><label class="two">Next action<input type="text" id="oNext" value="' + esc(n.next || '') + '" placeholder="e.g. Send revised quote"></label>' +
       '<label>Follow-up date<input type="date" id="oDue" value="' + esc(n.due || '') + '"></label>' +
       '<label class="full"><input type="checkbox" id="oPin"' + (n.pin ? ' checked' : '') + '> ⭐ Pin to the top of "Focus this week"</label></div>' +
-      '<div class="hint">Notes stay on this tablet and carry over to future uploads. They are not written back to Dynamics 365.</div>' +
+      '<div class="hint">Notes sync between your devices through your relay and carry over to future uploads. They are not written back to Dynamics 365.</div>' +
       '<div class="btns"><button type="button" id="oClose">Close</button><button type="button" class="pri" id="oSave">Save</button></div>';
     $('oppModal').style.display = 'flex';
     $('oClose').onclick = function () { $('oppModal').style.display = 'none'; };
     $('oSave').onclick = function () {
       var v = { next: $('oNext').value.trim(), due: $('oDue').value, pin: $('oPin').checked };
       if (v.next || v.due || v.pin) notes[id] = v; else delete notes[id];
-      saveJSON('dash_oppnotes', notes); $('oppModal').style.display = 'none'; renderPipeline();
+      saveJSON('dash_oppnotes', notes); pushSync(); $('oppModal').style.display = 'none'; renderPipeline();
     };
   }
   function showList(title, list) {
@@ -1460,9 +1490,9 @@
     ['name', 'Your first name', 'text'], ['city', 'Weather location label', 'text'], ['clock24', '24-hour clock', 'checkbox'],
     ['lat', 'Weather latitude', 'text'], ['lon', 'Weather longitude', 'text'], ['clocks', 'World clocks (Label|Timezone, comma separated)', 'text'],
     ['h', 'News'],
-    ['newsBbcUrl', 'BBC Latest feed (RSS)', 'text', 'two'], ['newsRotate', 'Switch BBC ⇄ UAE every (seconds, 0 = never)', 'number'],
+    ['newsBbcUrl', 'BBC Latest feed (RSS)', 'text', 'two'], ['newsRotate', 'Switch BBC → UAE → Sport every (seconds, 0 = never)', 'number'],
     ['newsUaeUrl', 'UAE Latest feed (The National)', 'text', 'two'], ['newsRefresh', 'Refresh news every (minutes, min 5)', 'number'],
-    ['newsUaeBackup', 'UAE backup feed (used if The National fails)', 'text', 'full'],
+    ['newsUaeBackup', 'UAE backup feed (used if The National fails)', 'text', 'two'], ['newsSportUrl', 'BBC Sport feed (RSS)', 'text'],
     ['h', 'Calendars'], ['cals'],
     ['proxy', 'Relay prefixes, tried in order, separated by spaces. Put your own relay first.', 'text', 'full'],
     ['h', 'Work hours & wellbeing nudges'],
@@ -1547,7 +1577,8 @@
   });
   $('btnClearPipe').addEventListener('click', function () {
     if (!confirm('Remove uploaded pipeline data, previous snapshot and opportunity notes from this tablet?')) return;
-    ['dash_pipe', 'dash_pipe_prev', 'dash_oppnotes'].forEach(function (k) { localStorage.removeItem(k); }); location.reload();
+    ['dash_pipe', 'dash_pipe_prev', 'dash_oppnotes'].forEach(function (k) { localStorage.removeItem(k); });
+    pipe = null; pipePrev = null; notes = {}; pushSync().then(function () { location.reload(); });
   });
 
   /* =========================================================
@@ -1567,7 +1598,7 @@
   }, 180000);
 
   var lastDay = dayKey(new Date());
-  function refreshAll() { loadCalendar(); loadNews(); loadWeather(); loadPrayer(); setStatus('Refreshed ' + fmtTime(new Date())); }
+  function refreshAll() { loadCalendar(); loadNews(); loadWeather(); loadPrayer(); pullSync(); setStatus('Refreshed ' + fmtTime(new Date())); }
   resetWellDay(); tickClock(); showQuote(); renderFocus(); renderTimerRow(); renderDl(); renderWater(); refreshAll(); renderPipeline();
   setInterval(tickClock, 1000);
   setInterval(function () {
@@ -1579,6 +1610,7 @@
     if (cfg.cals.some(function (c) { return c.url; }) && navigator.onLine !== false && Date.now() - Math.max(lastCalOk, bootAt) > 30 * 60000) location.reload();
   }, 30000);
   setInterval(loadCalendar, 5 * 60000);
+  setInterval(pullSync, 3 * 60000);
   window.addEventListener('online', refreshAll);
   window.addEventListener('pageshow', function (e) { if (e.persisted) refreshAll(); });
   setInterval(loadNews, Math.max(5, +cfg.newsRefresh || 15) * 60000);
