@@ -19,7 +19,7 @@
   #pages { width: 200vw; height: 100vh; display: flex; transition: transform 0.45s ease; }
   .page { width: 100vw; height: 100vh; padding: 0.7rem 0.7rem 2rem; display: grid; gap: 0.7rem; transition: transform 2s ease; }
 
-  #p1 { grid-template-columns: 1.15fr 1fr 0.8fr; grid-template-rows: auto 0.72fr 1.45fr; grid-template-areas: "top top top" "today focus news" "week week dl"; }
+  #p1 { grid-template-columns: 1.1fr 1fr 1fr; grid-template-rows: auto 0.72fr 1.45fr; grid-template-areas: "top top top" "today focus dl" "week week news"; }
   #p2 { grid-template-columns: 1.35fr 1fr 1.15fr; grid-template-rows: auto 1fr 1fr; grid-template-areas: "kpi kpi kpi" "pfocus funnel follow" "pfocus closing changes"; }
 
   .card { background: #16213a; border: 1px solid #2a3a5c; border-radius: 0.9rem; padding: 0.7rem 0.95rem; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
@@ -97,9 +97,9 @@
 
   /* ---- News ---- */
   #newsCard { grid-area: news; }
-  #newsList { list-style: none; counter-reset: n; }
-  #newsList li { counter-increment: n; display: flex; gap: 0.55rem; padding: 0.42rem 0; border-bottom: 1px solid #1a253d; font-size: 0.9rem; line-height: 1.3; cursor: pointer; }
-  #newsList li:before { content: counter(n); color: #f5b94a; font-weight: 700; min-width: 1rem; }
+  #newsList { list-style: none; overflow: hidden; }
+  #newsList li { display: flex; gap: 0.55rem; padding: 0.42rem 0; border-bottom: 1px solid #1a253d; font-size: 0.9rem; line-height: 1.3; cursor: pointer; }
+  #newsList li .num { color: #f5b94a; font-weight: 700; min-width: 1.2rem; }
   #newsList li .ago { display: block; font-size: 0.7rem; color: #8a9cbc; margin-top: 0.1rem; }
   #newsList { transition: opacity 0.35s ease; }
   #newsList.fade { opacity: 0; }
@@ -112,7 +112,7 @@
 
   /* ---- Week ---- */
   #weekCard { grid-area: week; }
-  #week { display: grid; grid-template-columns: repeat(5, 1fr) 0.7fr 0.7fr; grid-template-rows: minmax(0, 1fr); gap: 0.4rem; flex: 1; min-height: 0; }
+  #week { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0.4rem; flex: 1; min-height: 0; }
   .day { background: #1c2a47; border-radius: 0.5rem; padding: 0.4rem 0.4rem; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
   .day.today { outline: 2px solid #f5b94a; }
   .day.wkend { background: #131c2f; }
@@ -830,9 +830,13 @@
 
     // Week grid
     var mon = addDays(weekMonday(now), weekView * 7), wk = '';
-    $('wkRange').textContent = fmtShort(mon) + ' – ' + fmtShort(addDays(mon, 6)) + (lastCalOk ? ' · updated ' + fmtTime(new Date(lastCalOk)) : '');
-    for (var i = 0; i < 7; i++) {
-      var d0 = addDays(mon, i), dow = d0.getDay(), de = eventsOn(d0);
+    var shown = [];
+    for (var j = 0; j < 7; j++) if (isWorkday(addDays(mon, j))) shown.push(addDays(mon, j)); // weekends hidden; uses "Work days" setting
+    if (!shown.length) shown = [mon];
+    $('wkRange').textContent = fmtShort(shown[0]) + ' – ' + fmtShort(shown[shown.length - 1]) + (lastCalOk ? ' · updated ' + fmtTime(new Date(lastCalOk)) : '');
+    $('week').style.gridTemplateColumns = 'repeat(' + shown.length + ', 1fr)';
+    for (var i = 0; i < shown.length; i++) {
+      var d0 = shown[i], dow = d0.getDay(), de = eventsOn(d0);
       var c = 'day' + (+d0 === +t0 ? ' today' : '') + (!isWorkday(d0) ? ' wkend' : '') + (d0 < t0 ? ' gone' : '');
       wk += '<div class="' + c + '"><div class="dh"><span>' + DAYS[dow] + ' <b>' + d0.getDate() + '</b></span><span class="cnt">' + (de.length || '') + '</span></div>';
       de.forEach(function (e) {
@@ -1087,12 +1091,12 @@
     for (var i = 0; i < btns.length; i++) btns[i].className = 'hbtn' + (btns[i].getAttribute('data-n') === newsTab ? ' on' : '');
     function paint() {
       var tag = { biz: '<span class="ntag biz">Business</span>', gulf: '<span class="ntag">Gulf</span>' };
-      el.innerHTML = n.items.map(function (x) {
-        return '<li data-l="' + esc(x.link) + '"><span>' + (newsTab === 'uae' && tag[x.sec] ? tag[x.sec] : '') + esc(x.title) + '<span class="ago">' + ago(x.date) + '</span></span></li>';
+      el.innerHTML = n.items.map(function (x, i) {
+        return '<li data-l="' + esc(x.link) + '"><span class="num">' + (i + 1) + '</span><span>' + (newsTab === 'uae' && tag[x.sec] ? tag[x.sec] : '') + esc(x.title) + '<span class="ago">' + ago(x.date) + '</span></span></li>';
       }).join('') || '<li class="empty">' + (n.err ? 'Headlines unavailable right now. Retrying automatically.' : 'Loading…') + '</li>';
       $('newsSrc').textContent = n.src + (n.at ? ' · ' + (n.stale ? 'saved ' : '') + fmtTime(new Date(n.at)) : '');
       $('newsSrc').title = n.err || '';
-      el.className = 'scroll';
+      el.className = 'scroll'; el.scrollTop = 0;
     }
     if (animate) { el.className = 'scroll fade'; setTimeout(paint, 350); } else paint();
   }
@@ -1109,6 +1113,15 @@
     bar.style.width = Math.min(100, (now - newsTabAt) / per * 100) + '%';
     if (now - newsTabAt >= per) setNewsTab(newsTab === 'bbc' ? 'uae' : 'bbc', false);
   }
+  // Vertical carousel: every few seconds the top headline slides up and rejoins at the bottom.
+  // Pauses for 20 seconds after the screen is touched so a headline can be read or tapped.
+  function rollNews() {
+    var el = $('newsList'), first = el.firstElementChild;
+    if (!first || el.scrollHeight <= el.clientHeight + 2 || Date.now() - lastTouch < 20000) return;
+    el.scrollTo({ top: first.offsetHeight, behavior: 'smooth' });
+    setTimeout(function () { if (el.firstElementChild === first) { el.appendChild(first); el.scrollTop = 0; } }, 900);
+  }
+  setInterval(rollNews, 6000);
   $('newsList').addEventListener('click', function (e) { var li = e.target.closest ? e.target.closest('li') : null; var l = li && li.getAttribute('data-l'); if (l) window.open(l, '_blank'); });
 
   /* =========================================================
