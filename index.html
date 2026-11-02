@@ -19,7 +19,7 @@
   #pages { width: 200vw; height: 100vh; display: flex; transition: transform 0.45s ease; }
   .page { width: 100vw; height: 100vh; padding: 0.7rem 0.7rem 2rem; display: grid; gap: 0.7rem; transition: transform 2s ease; }
 
-  #p1 { grid-template-columns: 1.15fr 1fr 1.1fr; grid-template-rows: auto 1fr 0.9fr; grid-template-areas: "top top top" "today focus news" "week week dl"; }
+  #p1 { grid-template-columns: 1.15fr 1fr 0.8fr; grid-template-rows: auto 0.72fr 1.45fr; grid-template-areas: "top top top" "today focus news" "week week dl"; }
   #p2 { grid-template-columns: 1.35fr 1fr 1.15fr; grid-template-rows: auto 1fr 1fr; grid-template-areas: "kpi kpi kpi" "pfocus funnel follow" "pfocus closing changes"; }
 
   .card { background: #16213a; border: 1px solid #2a3a5c; border-radius: 0.9rem; padding: 0.7rem 0.95rem; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
@@ -112,15 +112,18 @@
 
   /* ---- Week ---- */
   #weekCard { grid-area: week; }
-  #week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.4rem; flex: 1; min-height: 0; }
-  .day { background: #1c2a47; border-radius: 0.5rem; padding: 0.35rem 0.4rem; overflow: hidden; display: flex; flex-direction: column; }
+  #week { display: grid; grid-template-columns: repeat(5, 1fr) 0.7fr 0.7fr; grid-template-rows: minmax(0, 1fr); gap: 0.4rem; flex: 1; min-height: 0; }
+  .day { background: #1c2a47; border-radius: 0.5rem; padding: 0.4rem 0.4rem; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
   .day.today { outline: 2px solid #f5b94a; }
   .day.wkend { background: #131c2f; }
   .day.gone { opacity: 0.45; }
-  .day .dh { font-size: 0.72rem; color: #c3d3ee; margin-bottom: 0.28rem; display: flex; justify-content: space-between; }
-  .day .dh b { color: #e6edf7; font-size: 0.92rem; }
-  .day .it { font-size: 0.68rem; padding: 0.13rem 0.3rem; border-radius: 0.25rem; margin-bottom: 0.18rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid #3b82f6; }
-  .day .more, .day .cnt { font-size: 0.66rem; color: #a9bcdb; }
+  .day .dh { font-size: 0.82rem; color: #c3d3ee; margin-bottom: 0.3rem; display: flex; justify-content: space-between; flex-shrink: 0; }
+  .day .dh b { color: #e6edf7; font-size: 1.05rem; }
+  .day .it { font-size: 0.8rem; line-height: 1.25; padding: 0.2rem 0.35rem; border-radius: 0.3rem; margin-bottom: 0.22rem; border-left: 3px solid #3b82f6; flex-shrink: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  .day .it .t { font-weight: 700; color: #e6edf7; margin-right: 0.3rem; font-variant-numeric: tabular-nums; }
+  .day .it.past { opacity: 0.45; }
+  .day .more { font-size: 0.75rem; color: #a9bcdb; flex-shrink: 0; }
+  .day .cnt { font-size: 0.75rem; color: #a9bcdb; }
   #calLegend { display: flex; gap: 0.7rem; font-size: 0.7rem; color: #c3d3ee; text-transform: none; letter-spacing: 0; font-weight: 400; }
   #calLegend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.25rem; vertical-align: middle; }
 
@@ -756,14 +759,17 @@
     return out.sort(function (a, b) { return (a.allDay === b.allDay ? 0 : a.allDay ? -1 : 1) || a.start - b.start; });
   }
   function reviveEvents(list) { return list.map(function (e) { e.start = new Date(e.start); e.end = new Date(e.end); return e; }); }
+  var lastCalOk = 0, lastCalTry = 0, bootAt = Date.now();
   function loadCalendar() {
     var cals = cfg.cals.filter(function (c) { return c.url; });
+    lastCalTry = Date.now();
     if (!cals.length) { events = sortEvents(demoEvents()); $('calStatus').textContent = 'Sample data: add calendar links in ⚙ Settings'; renderCal(); return; }
     Promise.all(cals.map(function (c) {
       return fetchText(c.url).then(function (txt) {
         if (txt.indexOf('BEGIN:VCALENDAR') < 0) throw new Error('not ICS');
         var ev = buildEvents(parseICS(txt), c);
         saveJSON('dash_cal_' + c.url.length + '_' + c.name, { at: Date.now(), ev: ev });
+        lastCalOk = Date.now();
         calOk[c.name] = true; return ev;
       }).catch(function (err) {
         calOk[c.name] = false; calErr[c.name] = err.message;
@@ -824,20 +830,34 @@
 
     // Week grid
     var mon = addDays(weekMonday(now), weekView * 7), wk = '';
-    $('wkRange').textContent = fmtShort(mon) + ' – ' + fmtShort(addDays(mon, 6));
+    $('wkRange').textContent = fmtShort(mon) + ' – ' + fmtShort(addDays(mon, 6)) + (lastCalOk ? ' · updated ' + fmtTime(new Date(lastCalOk)) : '');
     for (var i = 0; i < 7; i++) {
       var d0 = addDays(mon, i), dow = d0.getDay(), de = eventsOn(d0);
       var c = 'day' + (+d0 === +t0 ? ' today' : '') + (!isWorkday(d0) ? ' wkend' : '') + (d0 < t0 ? ' gone' : '');
       wk += '<div class="' + c + '"><div class="dh"><span>' + DAYS[dow] + ' <b>' + d0.getDate() + '</b></span><span class="cnt">' + (de.length || '') + '</span></div>';
-      de.slice(0, 5).forEach(function (e) {
-        wk += '<div class="it" style="border-left-color:' + e.color + ';background:' + rgba(e.color, 0.22) + '">' + (e.allDay ? '' : fmtTime(e.start) + ' ') + esc(e.title) + '</div>';
+      de.forEach(function (e) {
+        wk += '<div class="it' + (!e.allDay && e.end <= now ? ' past' : '') + '" style="border-left-color:' + e.color + ';background:' + rgba(e.color, 0.22) + '">' +
+          '<span class="t">' + (e.allDay ? 'All day' : fmtTime(e.start)) + '</span>' + esc(e.title) + '</div>';
       });
-      if (de.length > 5) wk += '<div class="more">+' + (de.length - 5) + ' more</div>';
       wk += '</div>';
     }
     $('week').innerHTML = wk;
+    fitWeek();
     $('calLegend').innerHTML = cfg.cals.map(function (c) { return '<span><i style="background:' + c.color + '"></i>' + esc(c.name) + '</span>'; }).join('');
   }
+  // Show as many appointments as fit in each day column; the rest become "+N more".
+  function fitWeek() {
+    [].forEach.call($('week').children, function (d) {
+      if (d.scrollHeight <= d.clientHeight + 1) return;
+      var its = d.querySelectorAll('.it'), more = document.createElement('div');
+      more.className = 'more'; d.appendChild(more);
+      for (var k = its.length - 1; k >= 0; k--) {
+        its[k].style.display = 'none'; more.textContent = '+' + (its.length - k) + ' more';
+        if (d.scrollHeight <= d.clientHeight + 1) break;
+      }
+    });
+  }
+  window.addEventListener('resize', function () { renderCal(); });
   function renderFree(now, today) {
     var wb = workBounds(now), ws = wb[0], we = wb[1], span = we - ws;
     if (!isWorkday(now)) { $('freeTxt').innerHTML = 'Weekend: no working hours today'; $('freeBar').innerHTML = ''; $('freeScale').innerHTML = ''; return; }
@@ -1520,8 +1540,13 @@
     renderCal(); renderPrayer(); checkNudges(); checkUploadDue();
     if (page === 1 && +cfg.autoReturn > 0 && Date.now() - lastTouch > cfg.autoReturn * 60000 && $('oppModal').style.display !== 'flex') goPage(0);
     if (dayKey(new Date()) !== lastDay) location.reload();
+    // Android can pause a page's timers; catch up as soon as we run again, and reload if the calendar has been stale for 30 minutes.
+    if (Date.now() - lastCalTry > 6 * 60000) loadCalendar();
+    if (cfg.cals.some(function (c) { return c.url; }) && navigator.onLine !== false && Date.now() - Math.max(lastCalOk, bootAt) > 30 * 60000) location.reload();
   }, 30000);
-  setInterval(loadCalendar, 10 * 60000);
+  setInterval(loadCalendar, 5 * 60000);
+  window.addEventListener('online', refreshAll);
+  window.addEventListener('pageshow', function (e) { if (e.persisted) refreshAll(); });
   setInterval(loadNews, Math.max(5, +cfg.newsRefresh || 15) * 60000);
   setInterval(tickNewsRotate, 1000);
   setInterval(loadWeather, 30 * 60000);
